@@ -84,7 +84,7 @@ def main():
 
         os.replace(current_map_image_name, previous_map_image_name)
         os.replace(generated_file_name, current_map_image_name)
-        os.remove(generated_file_name)
+        #os.remove(generated_file_name)
        
 
 def download_cache_with_xteas():
@@ -221,32 +221,46 @@ def download_and_extract_cache(cache_zip_url, output_dir):
     os.remove(cache_zip)
 
 
+
 def build_full_map_images(cache_dir, xtea_file):
     """
-        Runs Runelite's MapImageDumper Java program to generate full OSRS map images
+    Runs Runelite's MapImageDumper Java program to generate full OSRS map images,
+    skipping planes that already have generated images.
     """
     os.chdir('/runelite/cache')
 
     jar_file = glob.glob("target/*jar-with-dependencies.jar")[0]
 
-    subprocess.run(
-        [
-            'java', 
-            '-Xmx8g', 
-            '-cp', 
-            jar_file,
-            'net.runelite.cache.MapImageDumper', 
-            '--cachedir', cache_dir, 
-            '--xteapath', xtea_file, 
-            '--outputdir', GENERATED_FULL_IMAGES
-        ], 
-        check=True
-    )
-
+    # Iterate over planes to check if the image already exists
     for plane in range(MIN_Z, MAX_Z + 1):
         new_map_image_path = os.path.join(GENERATED_FULL_IMAGES, f"img-{plane}.png")
         renamed_new_map_image_path = os.path.join(GENERATED_FULL_IMAGES, f"new-map-image-{plane}.png")
-        os.replace(new_map_image_path, renamed_new_map_image_path)
+
+        # Check if the renamed new map image already exists
+        if os.path.exists(renamed_new_map_image_path):
+            print(f"Skipping plane {plane}, as new-map-image-{plane}.png already exists.")
+            continue
+
+        # If the image doesn't exist, generate it using MapImageDumper
+        print(f"Generating map image for plane {plane}...")
+        subprocess.run(
+            [
+                'java', 
+                '-Xmx8g', 
+                '-cp', 
+                jar_file,
+                'net.runelite.cache.MapImageDumper', 
+                '--cachedir', cache_dir, 
+                '--xteapath', xtea_file, 
+                '--outputdir', GENERATED_FULL_IMAGES
+            ], 
+            check=True
+        )
+
+        # If a new image is generated, rename it
+        if os.path.exists(new_map_image_path):
+            os.replace(new_map_image_path, renamed_new_map_image_path)
+            print(f"Renamed map image for plane {plane} to new-map-image-{plane}.png.")
 
 
 def generate_tiles_for_plane(plane):
@@ -278,10 +292,17 @@ def generate_tiles_for_plane(plane):
     old_image = pyvips.Image.new_from_file(old_image_location)
     new_image = pyvips.Image.new_from_file(new_image_location)
 
+    #old_image_bw = old_image.colourspace('b-w')  # Convert to black and white
+    #new_image_bw = new_image.colourspace('b-w')  # Convert to black and white
+
+    #old_image_bw.write_to_file(os.path.join(GENERATED_FULL_IMAGES, f"current-map-image-{plane}-bw.png"))
+    #new_image_bw.write_to_file(os.path.join(GENERATED_FULL_IMAGES, f"new-map-image-{plane}-bw.png"))
+
     image_width = new_image.width
     image_width_tiles = int(image_width / TILE_SIZE_PX)
 
     starting_zoom = int(math.sqrt(math.pow(2, math.ceil(math.log(image_width_tiles) / math.log(2)))))
+
 
     LOG.info(f"{log_prefix} Calculating changed tiles")
     changed_tiles = get_changed_tiles(old_image, new_image, plane, starting_zoom)
@@ -349,7 +370,6 @@ def get_changed_tiles(old_image, new_image, plane, zoom):
                 })
 
     return changed_tiles
-
 
 def has_tile_changed(plane, zoom, tile_x, tile_y, old_image, new_image):
     new_image_tile = new_image.crop(tile_x, tile_y, TILE_SIZE_PX, TILE_SIZE_PX)

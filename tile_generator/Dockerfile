@@ -13,18 +13,20 @@ RUN conda create --name vips python=3.7
 # Update all future "RUN" commands to use the conda env
 SHELL ["conda", "run", "--no-capture-output", "-n", "vips", "/bin/bash", "-c"]
 
+RUN conda config --add channels conda-forge
+
 # Install vips
-RUN conda install --channel conda-forge pyvips
+RUN conda install pyvips=2.1.16
 
 # Install python dependencies
 COPY requirements.txt requirements.txt
 RUN pip install -r requirements.txt
 
 # Install Java 11
-RUN conda install -c conda-forge openjdk=11
+RUN conda install openjdk=11
 
 # Install Maven
-RUN conda install -c conda-forge maven
+RUN conda install maven
 
 # Clone runelite repo
 RUN git clone https://github.com/runelite/runelite.git /runelite
